@@ -1,4 +1,5 @@
 import os , threading, uuid
+os.environ["FASTEMBED_CACHE_PATH"] = "/tmp"
 from dotenv import load_dotenv
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
