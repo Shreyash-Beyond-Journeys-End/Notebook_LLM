@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Send, Trash2, FileText, Loader2 } from 'lucide-react';
+import { Upload, Send, Trash2, FileText, Loader2, BookOpen, Bot, User } from 'lucide-react';
 import { uploadFile, uploadRawText, sendQuery, deleteSession } from './services/api';
 import './App.css';
 
@@ -19,10 +19,19 @@ function App() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, isQuerying]);
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+    }
+  }, [inputText]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -38,7 +47,7 @@ function App() {
       const sid = await uploadFile(file);
       setSessionId(sid);
       localStorage.setItem('sessionId', sid);
-      setMessages([{ role: 'bot', text: 'Document uploaded successfully! How can I help you today?' }]);
+      setMessages([{ role: 'bot', text: `Document "${file.name}" uploaded successfully! How can I help you explore it today?` }]);
     } catch (err: any) {
       setError(err.message || 'Failed to upload file');
     } finally {
@@ -56,7 +65,7 @@ function App() {
       const sid = await uploadRawText(rawText);
       setSessionId(sid);
       localStorage.setItem('sessionId', sid);
-      setMessages([{ role: 'bot', text: 'Text uploaded successfully! How can I help you?' }]);
+      setMessages([{ role: 'bot', text: 'Text uploaded successfully! What would you like to know about it?' }]);
       setRawText('');
     } catch (err: any) {
       setError(err.message || 'Failed to upload text');
@@ -68,8 +77,12 @@ function App() {
   const handleSendMessage = async () => {
     if (!inputText.trim() || !sessionId || isQuerying) return;
 
-    const userQuery = inputText;
+    const userQuery = inputText.trim();
     setInputText('');
+    if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+    }
+    
     setMessages(prev => [...prev, { role: 'user', text: userQuery }]);
     setIsQuerying(true);
 
@@ -95,6 +108,7 @@ function App() {
     setSessionId(null);
     setMessages([]);
     localStorage.removeItem('sessionId');
+    setError(null);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -108,7 +122,10 @@ function App() {
     <div className="app-container">
       {/* Sidebar */}
       <aside className="sidebar">
-        <h2>NotebookLM</h2>
+        <h2>
+          <BookOpen className="logo-icon" size={28} />
+          NotebookLM
+        </h2>
         
         <div className="upload-section">
           <div 
@@ -123,19 +140,21 @@ function App() {
               style={{ display: 'none' }}
             />
             {isUploading ? (
-              <Loader2 className="upload-icon animate-spin" />
+              <Loader2 className="upload-icon animate-spin" size={36} />
             ) : (
-              <Upload className="upload-icon" />
+              <Upload className="upload-icon" size={36} />
             )}
-            <p>{isUploading ? 'Uploading...' : 'Upload PDF or TXT'}</p>
+            <p>{isUploading ? 'Processing Document...' : 'Upload Source Document'}</p>
+            <span className="upload-subtext">Supports PDF and TXT files</span>
           </div>
 
+          <div className="text-divider">OR</div>
+
           <div className="text-upload">
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '5px' }}>Or Paste Raw Text</p>
             <textarea 
               value={rawText}
               onChange={(e) => setRawText(e.target.value)}
-              placeholder="Paste your content here..."
+              placeholder="Paste raw text content here..."
               disabled={isUploading}
             />
             <button 
@@ -143,82 +162,105 @@ function App() {
               onClick={handleRawTextUpload}
               disabled={isUploading || !rawText.trim()}
             >
-              {isUploading ? <Loader2 className="animate-spin size-4" /> : <FileText size={18} />}
-              Upload Text
+              {isUploading ? <Loader2 className="animate-spin" size={18} /> : <FileText size={18} />}
+              Process Text
             </button>
           </div>
         </div>
 
-        {sessionId && (
-          <div className="session-info">
-            <strong>Active Session:</strong>
-            <div style={{ opacity: 0.7, marginTop: '4px', fontSize: '0.8rem' }}>{sessionId}</div>
+        {error && (
+          <div style={{ color: '#ef4444', marginTop: '16px', fontSize: '0.9rem', backgroundColor: '#fef2f2', padding: '10px', borderRadius: '8px', border: '1px solid #fee2e2' }}>
+            {error}
           </div>
         )}
 
-        {error && <div style={{ color: '#ef4444', marginTop: '10px', fontSize: '0.9rem' }}>{error}</div>}
+        <div style={{ flexGrow: 1 }}></div>
 
         {sessionId && (
-          <button className="btn-danger" onClick={handleClearSession}>
-            <Trash2 size={18} style={{ marginRight: '8px' }} />
-            Clear Session
-          </button>
+          <>
+            <div className="session-info">
+              <strong>
+                <span className="status-dot"></span>
+                Active Session
+              </strong>
+              <div style={{ opacity: 0.7, fontSize: '0.75rem', fontFamily: 'monospace' }}>{sessionId}</div>
+            </div>
+            
+            <button className="btn-danger" onClick={handleClearSession} style={{ marginTop: '12px', width: '100%' }}>
+              <Trash2 size={18} style={{ marginRight: '8px' }} />
+              End Session
+            </button>
+          </>
         )}
       </aside>
 
       {/* Main Chat Area */}
       <main className="chat-area">
         <header className="chat-header">
-          <h3>Assistant</h3>
+          <h3>Chat with your Document</h3>
         </header>
 
         <div className="messages-container">
           {messages.length === 0 ? (
             <div className="empty-state">
+              <BookOpen className="empty-state-icon" />
               <h3>Welcome to NotebookLM</h3>
-              <p>Upload a document or paste some text on the left to start asking questions!</p>
+              <p>Upload a PDF document or paste some text in the sidebar to create a grounded knowledge base, then start asking questions!</p>
             </div>
           ) : (
             messages.map((msg, index) => (
               <div key={index} className={`message-wrapper ${msg.role}`}>
-                <div className="message-bubble">
-                  {msg.text}
+                <div className="avatar">
+                  {msg.role === 'bot' ? <Bot size={20} /> : <User size={20} />}
+                </div>
+                <div className="message-content">
+                  <div className="message-bubble">
+                    {msg.text}
+                  </div>
                 </div>
               </div>
             ))
           )}
+          
           {isQuerying && (
             <div className="message-wrapper bot">
-              <div className="message-bubble">
-                <div className="loading-indicator">
-                  <span></span>
-                  <span></span>
-                  <span></span>
+              <div className="avatar">
+                <Bot size={20} />
+              </div>
+              <div className="message-content">
+                <div className="message-bubble" style={{ padding: '16px 20px' }}>
+                  <div className="loading-indicator">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
                 </div>
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} style={{ height: '1px' }} />
         </div>
 
         <div className="input-area">
-          <div className="input-container">
+          <div className="input-container-wrapper">
             <textarea
-                placeholder={sessionId ? "Type a message" : "Upload a source to start chatting"}
+                ref={textareaRef}
+                placeholder={sessionId ? "Ask a question about your document..." : "Upload a source document to start chatting"}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyDown={handleKeyPress}
                 disabled={!sessionId || isQuerying}
                 rows={1}
             />
+            <button 
+              className="btn-send"
+              onClick={handleSendMessage}
+              disabled={!sessionId || !inputText.trim() || isQuerying}
+              title="Send message"
+            >
+              {isQuerying ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+            </button>
           </div>
-          <button 
-            className={`btn-send ${inputText.trim() ? 'active' : ''}`}
-            onClick={handleSendMessage}
-            disabled={!sessionId || !inputText.trim() || isQuerying}
-          >
-            <Send size={24} />
-          </button>
         </div>
       </main>
     </div>
