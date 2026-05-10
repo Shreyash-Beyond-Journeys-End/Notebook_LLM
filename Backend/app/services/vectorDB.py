@@ -1,5 +1,5 @@
 import os , threading, uuid
-os.environ["FASTEMBED_CACHE_PATH"] = "/tmp"
+os.environ["FASTEMBED_CACHE_PATH"] = "./model_cache"
 from dotenv import load_dotenv
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -14,7 +14,9 @@ client = QdrantClient(
 )
 
 
+client = QdrantClient(":memory:")
 client.set_model("sentence-transformers/all-MiniLM-L6-v2")
+print("Model downloaded successfully!")
 
 lock = threading.Lock()
 
